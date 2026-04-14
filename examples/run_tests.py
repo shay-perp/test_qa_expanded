@@ -10,6 +10,7 @@ import logging
 import sys
 import threading
 import time
+import uuid
 from pathlib import Path
 
 # ── project root on sys.path (so src.* imports work when run directly) ──────
@@ -17,8 +18,7 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from src.analytics import accuracy, reporter
-from src.analytics import visualizer
+from src.analytics import accuracy, reporter, visualizer
 from src.analytics.statistics import compute_stats
 from src.testing.AmmeterTester import AmmeterTester
 from src.utils.ammeter_registry import AMMETER_REGISTRY
@@ -26,6 +26,9 @@ from src.utils.config_loader import load_config, get_ammeter_config
 from src.utils.constants import (
     KEY_PORT,
     KEY_COMMAND,
+    KEY_ANALYSIS,
+    KEY_VISUALIZATION,
+    KEY_ENABLED,
     SERVER_STARTUP_SEC,
 )
 
@@ -41,6 +44,10 @@ results_dir = Path(__file__).parent.parent / "results"
 
 def main() -> None:
     config = load_config(str(CONFIG_PATH))
+
+    # ── one session_id for this entire run ───────────────────────────────────
+    session_id = str(uuid.uuid4())
+    logger.info("Session started — session_id=%s", session_id)
 
     # ── start all ammeter servers ────────────────────────────────────────────
     servers: dict[str, tuple] = {}
@@ -61,18 +68,43 @@ def main() -> None:
     logger.info("Waiting %ss for servers to be ready …", SERVER_STARTUP_SEC)
     time.sleep(SERVER_STARTUP_SEC)
 
-    # ── collect samples and persist results ──────────────────────────────────
-    all_results:   dict[str, list] = {}   # name -> list[SampleResult]
-    all_stats:     dict[str, dict] = {}   # name -> stats dict
-    run_dirs:      dict[str, Path] = {}   # name -> run directory
-    shared_run_id: str = ""
+    # ── shared clock + parallel sampling ────────────────────────────────────
+    # session_start is the single time reference for ALL ammeters.
+    # Every timestamp_sec in every SampleResult is relative to this value,
+    # so samples from different ammeters can be compared on the same axis.
+    session_start = time.perf_counter()
+
+    raw_results:  dict[str, list] = {}   # name -> list[SampleResult]
+    raw_testers:  dict[str, AmmeterTester] = {}
+    results_lock  = threading.Lock()
+
+    def sample_ammeter(name: str) -> None:
+        tester  = AmmeterTester()
+        samples = tester.run_test(name, session_start)
+        with results_lock:
+            raw_results[name] = samples
+            raw_testers[name] = tester
+
+    sample_threads = [
+        threading.Thread(target=sample_ammeter, args=(name,), name=f"Sample-{name}")
+        for name in AMMETER_REGISTRY
+    ]
+    for t in sample_threads:
+        t.start()
+    for t in sample_threads:
+        t.join()
+
+    # ── compute stats and persist per-run artifacts (sequential is fine here)
+    all_results:  dict[str, list] = {}   # name -> list[SampleResult]
+    all_stats:    dict[str, dict] = {}   # name -> stats dict
+    ammeter_runs: dict[str, dict] = {}   # name -> index entry {run_id, mean, std}
 
     for name in AMMETER_REGISTRY:
-        tester  = AmmeterTester()
-        samples = tester.run_test(name)
-
-        if not shared_run_id:
-            shared_run_id = tester._run_id
+        samples = raw_results.get(name, [])
+        tester  = raw_testers.get(name)
+        if not samples or tester is None:
+            logger.warning("No results for %s — skipping.", name)
+            continue
 
         valid_values = [
             s.normalized_value
@@ -88,8 +120,9 @@ def main() -> None:
         all_results[name] = samples
         all_stats[name]   = stats
 
-        run_dirs[name] = reporter.save_run(
+        reporter.save_run(
             run_id=tester._run_id,
+            session_id=session_id,
             samples=samples,
             stats=stats,
             ammeter_type=name,
@@ -97,17 +130,26 @@ def main() -> None:
             config=config,
         )
 
-    # ── plot_comparison once — uses complete all_results ─────────────────────
-    from src.utils.constants import KEY_ANALYSIS, KEY_VISUALIZATION, KEY_ENABLED
+        ammeter_runs[name] = {
+            "run_id": tester._run_id,
+            "mean":   stats["mean"],
+            "std":    stats["std"],
+        }
+
+    # ── write one session entry to index.json ────────────────────────────────
+    if ammeter_runs:
+        reporter.write_session_index(session_id, ammeter_runs, results_dir)
+
+    # ── plot_comparison once — saved under results/sessions/{session_id}/ ────
     viz_enabled = (
         config.get(KEY_ANALYSIS, {})
               .get(KEY_VISUALIZATION, {})
               .get(KEY_ENABLED, False)
     )
-    if viz_enabled and all_results and shared_run_id:
-        comparison_dir = results_dir / "runs" / shared_run_id
-        comparison_dir.mkdir(parents=True, exist_ok=True)
-        visualizer.plot_comparison(all_results, shared_run_id, comparison_dir)
+    if viz_enabled and all_results:
+        session_dir = results_dir / "sessions" / session_id
+        session_dir.mkdir(parents=True, exist_ok=True)
+        visualizer.plot_comparison(all_results, session_id, session_dir)
 
     # ── stability ranking ────────────────────────────────────────────────────
     if all_stats:

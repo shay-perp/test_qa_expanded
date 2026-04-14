@@ -59,10 +59,15 @@ class AmmeterTester:
 
     # ── public ──────────────────────────────────────────────────────────────
 
-    def run_test(self, ammeter_name: str) -> list[SampleResult]:
+    def run_test(self, ammeter_name: str, session_start: float) -> list[SampleResult]:
         """
         Collect measurements_count samples from the named ammeter at
         sampling_frequency_hz, then return the list of SampleResult objects.
+
+        session_start must be a time.perf_counter() value created by the
+        caller before any ammeter loop begins.  All timestamp_sec values
+        across every ammeter in the session are relative to this single
+        reference point, making them comparable on a shared time axis.
         """
         sampling_cfg = self._config[KEY_TESTING][KEY_SAMPLING]
         measurements_count: int   = sampling_cfg[KEY_MEASUREMENTS_COUNT]
@@ -75,13 +80,12 @@ class AmmeterTester:
         )
 
         results: list[SampleResult] = []
-        start = time.perf_counter()
 
         for i in range(measurements_count):
-            target = self._compute_next_target(start, i, freq)
+            target = self._compute_next_target(session_start, i, freq)
             self._wait_until(target)
             sample = self._take_sample(ammeter_cfg, ammeter_name)
-            sample.timestamp_sec = time.perf_counter() - start
+            sample.timestamp_sec = time.perf_counter() - session_start
             results.append(sample)
 
         return results
