@@ -10,6 +10,18 @@ KEY_GREENLEE = "greenlee"
 KEY_ENTES = "entes"
 KEY_CIRCUTOR = "circutor"
 
+# Analysis config keys
+KEY_ANALYSIS      = "analysis"
+KEY_VISUALIZATION = "visualization"
+KEY_ENABLED       = "enabled"
+
+# Testing config keys
+KEY_TESTING            = "testing"
+KEY_SAMPLING           = "sampling"
+KEY_MEASUREMENTS_COUNT = "measurements_count"
+KEY_TOTAL_DURATION     = "total_duration_seconds"
+KEY_SAMPLING_FREQ      = "sampling_frequency_hz"
+
 # Timing
 SOCKET_TIMEOUT_SEC = 2.0
 SERVER_STARTUP_SEC = 3.0

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CopilotDiffPersistence">
+    <option name="pendingDiffs">
+      <map>
+        <entry key="$PROJECT_DIR$/src/utils/ammeter_registry.py">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/src/utils/ammeter_registry.py" />
+              <option name="updatedContent" value="from Ammeters.Greenlee_Ammeter import GreenleeAmmeter&#10;from Ammeters.Entes_Ammeter import EntesAmmeter&#10;from Ammeters.Circutor_Ammeter import CircutorAmmeter&#10;from src.utils.constants import KEY_GREENLEE, KEY_ENTES, KEY_CIRCUTOR&#10;&#10;AMMETER_REGISTRY = {&#10;    KEY_GREENLEE: GreenleeAmmeter,&#10;    KEY_ENTES:    EntesAmmeter,&#10;    KEY_CIRCUTOR: CircutorAmmeter,&#10;}&#10;" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+</project>
