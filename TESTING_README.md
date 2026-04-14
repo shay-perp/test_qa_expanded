@@ -77,19 +77,112 @@ pytest tests/ -v
 
 ---
 
+## Test Suite
+
+The test suite is organised into five files:
+
+**`test_analytics.py`** — unit tests for pure functions.
+These tests run with no servers, no files, no network.
+
+- `compute_stats` with known inputs (`[1,2,3,4,5]` → mean=3.0, min=1.0, max=5.0)
+  — verifies the statistical engine is numerically correct before any real data flows through it
+- `compute_stats` with a single value (std == 0, no exception)
+  — ensures the framework handles degenerate cases without crashing mid-session
+- `compute_stats` with empty list (raises `ValueError`)
+  — prevents silent NaN propagation into saved JSON files
+- `coefficient_of_variation` correctness (std=1, mean=10 → CV=10.0)
+  — the CV is the primary ranking metric; a bug here corrupts every accuracy report
+- `rank_ammeters` sorts by CV ascending
+  — the most stable device must appear first; wrong order misleads the engineer reading the report
+- reporter creates `raw_samples.csv` and `summary.json` in the correct path
+  — verifies the session directory structure is built correctly before integration tests run
+- two sequential `save_run` calls produce two entries in `index.json`
+  — historical retrieval depends on `index.json` growing correctly across sessions
+
+**`test_infrastructure.py`** — configuration and wiring tests.
+These tests verify that the config-driven architecture holds together correctly.
+
+- `config.yaml` loads and returns correct port (`int`) and command (`str`) per ammeter
+  — the entire system collapses if a port loads as a string or a command loads as `None`
+- missing config file raises `FileNotFoundError`
+  — fails fast with a clear error instead of a confusing `AttributeError` later
+- missing ammeter key raises `KeyError`
+  — catches config typos before a server starts on the wrong port
+- each ammeter class encodes `get_current_command` from `self._command`, not a hardcoded literal
+  — proves that removing hardcoded strings actually worked; the server must match the client
+- `AMMETER_REGISTRY` contains exactly `KEY_GREENLEE`, `KEY_ENTES`, `KEY_CIRCUTOR`
+  — the registry drives everything: missing a key means one ammeter is silently skipped
+
+**`test_sampler.py`** — sampler engine tests.
+These tests use a real `GreenleeAmmeter` server on port 5010 for integration paths,
+and mock socket for failure paths.
+
+- `run_test` returns exactly `measurements_count` `SampleResult` objects
+  — the analytics layer expects a fixed-length list; a short list produces wrong statistics
+- timestamps are monotonically non-decreasing across all samples
+  — a non-monotonic timestamp means the shared session clock is broken,
+    which invalidates cross-ammeter time comparisons
+- `_normalize` applies `scale_factor` correctly (`10.0 × 0.5 == 5.0`)
+  — normalization happens only here; a bug silently scales all saved values
+- socket timeout produces `SampleResult` with `raw_value=None`, no crash
+  — in a real embedded environment a device can be temporarily unresponsive;
+    the sampler must record the gap and continue, not abort the session
+- `ConnectionRefusedError` propagates out of `_take_sample`
+  — if a server is not running the error must surface immediately,
+    not be swallowed and silently produce a session of `None` values
+
+**`test_edge_cases.py`** — boundary and failure tests.
+These tests verify the system behaves correctly at its limits.
+
+- binding two sockets on the same port raises `OSError`
+  — confirms `SO_REUSEADDR` fix works and two servers cannot accidentally share a port
+- empty socket response raises `ValueError` in `_request_raw`
+  — an ammeter that connects but sends nothing must not be treated as a valid 0 A reading
+- `config_loader` called with nonexistent path raises `FileNotFoundError`
+  — clear error on startup rather than a crash inside a running session
+- `compute_stats([])` raises `ValueError` with a clear message
+  — an empty session (all timeouts) must not produce NaN in the accuracy report
+- starting and stopping a server releases the port for immediate reuse
+  — the `stop()` + `join()` mechanism must actually free the port;
+    if it does not, re-running the test suite within seconds will fail with `AddressInUse`
+
+**`test_integration.py`** — full session flow tests.
+These tests start all three real ammeter servers internally on ports 5020–5022.
+The production servers on 5000–5002 do not need to be running.
+
+- full session creates correct directory structure under `sessions/{session_id}/runs/{ammeter_type}/`
+  — end-to-end proof that the `session_id` scoping, parallel sampling,
+    and reporter work together correctly as a complete pipeline
+- `raw_samples.csv` contains correct column headers
+  — any column rename or reorder breaks downstream tools that parse the CSV by name
+- `accuracy_report.json` contains all required fields including `per_ammeter_stats`
+  — the report is the primary deliverable; a missing field means the engineer
+    looking at `results/sessions/` gets an incomplete picture
+- `index.json` session entry contains `cv_percent` per ammeter
+  — historical comparison across sessions depends on `cv_percent` being present
+    in the index; without it you can only compare means, not stability
+
+---
+
 ## Results Structure
 
 ```
 results/
-├── index.json                        # one entry per session (all ammeters grouped)
-├── runs/
-│   ├── {run_id}/                     # one directory per ammeter per session
-│   │   ├── raw_samples.csv           # timestamp_sec, raw_value, normalized_value, ammeter_type
-│   │   ├── summary.json              # run_id, session_id, stats, measurements_count
-│   │   └── plot_timeseries.png       # line chart (only if visualization.enabled = true)
+├── index.json
 └── sessions/
     └── {session_id}/
-        └── plot_comparison.png       # boxplot of all ammeters (only if visualization.enabled = true)
+        ├── accuracy_report.json
+        ├── plot_comparison.png
+        ├── plot_accuracy.png
+        └── runs/
+            ├── greenlee/
+            │   ├── raw_samples.csv
+            │   ├── summary.json
+            │   └── plot_timeseries.png
+            ├── entes/
+            │   └── (same files)
+            └── circutor/
+                └── (same files)
 ```
 
 ### `index.json` entry format
@@ -99,14 +192,29 @@ Each invocation of `run_tests.py` appends one entry:
 ```json
 {
   "session_id": "uuid",
-  "iso_timestamp": "2026-04-14T11:00:00+00:00",
+  "iso_timestamp": "...",
   "ammeters": {
-    "greenlee":  {"run_id": "uuid", "mean": 0.18, "std": 0.21},
-    "entes":     {"run_id": "uuid", "mean": 68.4, "std": 31.0},
-    "circutor":  {"run_id": "uuid", "mean": 0.03, "std": 0.01}
-  }
+    "greenlee":  {"run_id": "uuid", "mean": 0.18, "std": 0.21, "cv_percent": 55.9},
+    "entes":     {"run_id": "uuid", "mean": 61.6, "std": 27.7, "cv_percent": 44.9},
+    "circutor":  {"run_id": "uuid", "mean": 0.03, "std": 0.01, "cv_percent": 49.1}
+  },
+  "most_stable": "entes"
 }
 ```
+
+---
+
+### `accuracy_report.json` fields
+
+Written once per session to `results/sessions/{session_id}/accuracy_report.json`.
+
+| Field | Description |
+|-------|-------------|
+| `stability_ranking` | Ammeters sorted by CV ascending — lower CV = more repeatable readings in this session |
+| `relative_precision` | Same ammeters normalised to their own mean before comparing — allows fair cross-scale comparison (e.g. ENTES at ~60 A vs Greenlee at ~0.1 A) |
+| `per_ammeter_stats` | Full descriptive statistics for each ammeter: `mean`, `median`, `std`, `min`, `max` of all `normalized_value` samples |
+| `most_stable` | Ammeter with the lowest CV in this session |
+| `note` | Reminder that CV measures precision (repeatability), not absolute accuracy |
 
 ---
 
@@ -126,6 +234,24 @@ joining on timestamps. Each ammeter still gets its own `run_id` and its own
 Python. Unlike `time.time()`, it is not affected by NTP adjustments or system
 clock changes, which makes it reliable for sub-second scheduling and for
 computing accurate inter-sample intervals.
+
+### Parallel Sampling and Normalized Timestamps
+
+All three ammeters are sampled concurrently in separate threads.
+A single `session_start = time.perf_counter()` is created once before
+any sampling thread starts. Every sample's `timestamp_sec` field is
+computed as:
+
+```
+sample.timestamp_sec = time.perf_counter() - session_start
+```
+
+This means timestamps are relative to a single shared reference point,
+so a greenlee sample at `t=2.5s` and an entes sample at `t=2.5s` represent
+the same moment in real time. This is essential for embedded systems
+testing where comparing device behaviour at the same instant is required.
+Total sampling time is ~5 seconds regardless of the number of ammeters
+because all three run in parallel — not ~15 seconds sequentially.
 
 ### Why Coefficient of Variation (CV)?
 

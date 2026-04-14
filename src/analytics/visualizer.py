@@ -90,3 +90,57 @@ def plot_comparison(
     fig.savefig(output_path / "plot_comparison.png", dpi=120)
     plt.close(fig)
 
+
+def plot_accuracy(
+    ranking: list[dict],
+    comparison: list[dict],
+    run_id: str,
+    output_path: Path,
+) -> None:
+    """
+    Side-by-side bar chart showing CV% (stability) and relative_std (precision)
+    for each ammeter.
+    Left bars:  CV% from stability ranking.
+    Right bars: relative_std from cross-ammeter comparison.
+    Saves to output_path/plot_accuracy.png.
+    Skips silently if both lists are empty.
+    """
+    if not ranking and not comparison:
+        return
+
+    # Build aligned data keyed on ammeter_type
+    ammeter_names = [e["ammeter_type"] for e in ranking]
+    cv_values     = [e["cv_percent"]   for e in ranking]
+
+    comp_by_name  = {e["ammeter_type"]: e["relative_std"] for e in comparison}
+    rel_std_values = [comp_by_name.get(n, 0.0) for n in ammeter_names]
+
+    x      = np.arange(len(ammeter_names))
+    width  = 0.35
+
+    fig, ax = plt.subplots(figsize=(max(6, 2.5 * len(ammeter_names)), 5))
+    bars_cv  = ax.bar(x - width / 2, cv_values,      width, label="CV (%)",        color="steelblue")
+    bars_rel = ax.bar(x + width / 2, rel_std_values,  width, label="Relative Std",  color="coral")
+
+    # Value labels on top of each bar
+    for bar in bars_cv:
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
+                f"{bar.get_height():.2f}", ha="center", va="bottom", fontsize=8)
+    for bar in bars_rel:
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
+                f"{bar.get_height():.3f}", ha="center", va="bottom", fontsize=8)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(ammeter_names)
+    ax.set_xlabel("Ammeter type")
+    ax.set_ylabel("Value")
+    ax.set_title(f"Accuracy assessment  [session {run_id[:8]}]")
+    ax.legend()
+    ax.grid(True, axis="y", linestyle="--", alpha=0.4)
+    fig.tight_layout()
+
+    output_path.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path / "plot_accuracy.png", dpi=120)
+    plt.close(fig)
+
+

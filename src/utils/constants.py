@@ -15,6 +15,11 @@ KEY_ANALYSIS      = "analysis"
 KEY_VISUALIZATION = "visualization"
 KEY_ENABLED       = "enabled"
 
+# Accuracy / index keys
+KEY_CV_PERCENT  = "cv_percent"
+KEY_MOST_STABLE = "most_stable"
+KEY_NOTE        = "note"
+
 # Testing config keys
 KEY_TESTING            = "testing"
 KEY_SAMPLING           = "sampling"

@@ -29,6 +29,7 @@ from src.utils.constants import (
     KEY_ANALYSIS,
     KEY_VISUALIZATION,
     KEY_ENABLED,
+    KEY_CV_PERCENT,
     SERVER_STARTUP_SEC,
 )
 
@@ -117,6 +118,7 @@ def main() -> None:
             continue
 
         stats = compute_stats(valid_values)
+        cv    = accuracy.coefficient_of_variation(stats)
         all_results[name] = samples
         all_stats[name]   = stats
 
@@ -131,9 +133,10 @@ def main() -> None:
         )
 
         ammeter_runs[name] = {
-            "run_id": tester._run_id,
-            "mean":   stats["mean"],
-            "std":    stats["std"],
+            "run_id":       tester._run_id,
+            "mean":         stats["mean"],
+            "std":          stats["std"],
+            KEY_CV_PERCENT: cv,
         }
 
     # ── write one session entry to index.json ────────────────────────────────
@@ -146,12 +149,14 @@ def main() -> None:
               .get(KEY_VISUALIZATION, {})
               .get(KEY_ENABLED, False)
     )
+    session_dir = results_dir / "sessions" / session_id
     if viz_enabled and all_results:
-        session_dir = results_dir / "sessions" / session_id
         session_dir.mkdir(parents=True, exist_ok=True)
         visualizer.plot_comparison(all_results, session_id, session_dir)
 
     # ── stability ranking ────────────────────────────────────────────────────
+    ranking    = []
+    comparison = []
     if all_stats:
         ranking = accuracy.rank_ammeters(all_stats)
         accuracy.print_ranking(ranking)
@@ -160,6 +165,19 @@ def main() -> None:
     if all_results:
         comparison = accuracy.compare_ammeters(all_results)
         accuracy.print_comparison(comparison)
+
+    # ── accuracy report (JSON) + accuracy plot ───────────────────────────────
+    if ranking or comparison:
+        reporter.write_accuracy_report(
+            session_id,
+            ranking,
+            comparison,
+            results_dir,
+            per_ammeter_stats=all_stats,
+        )
+        if viz_enabled:
+            session_dir.mkdir(parents=True, exist_ok=True)
+            visualizer.plot_accuracy(ranking, comparison, session_id, session_dir)
 
     # ── stop all servers cleanly ─────────────────────────────────────────────
     for name, (inst, _) in servers.items():

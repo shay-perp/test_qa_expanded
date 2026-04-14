@@ -23,9 +23,22 @@ from src.utils.constants import (
     KEY_SAMPLING_FREQ,
 )
 from Ammeters.Greenlee_Ammeter import GreenleeAmmeter
+from Ammeters.Entes_Ammeter import EntesAmmeter
+from Ammeters.Circutor_Ammeter import CircutorAmmeter
 
 # ── port constants for test servers (never overlap with production 5000-5002) ─
 _TEST_GREENLEE_PORT = 5010
+
+# ── port constants for integration tests ─────────────────────────────────────
+_INTEGRATION_GREENLEE_PORT  = 5020
+_INTEGRATION_ENTES_PORT     = 5021
+_INTEGRATION_CIRCUTOR_PORT  = 5022
+
+_INTEGRATION_COMMANDS = {
+    KEY_GREENLEE: "MEASURE_GREENLEE -get_measurement",
+    KEY_ENTES:    "MEASURE_ENTES -get_data",
+    KEY_CIRCUTOR: "MEASURE_CIRCUTOR -get_measurement",
+}
 
 
 @pytest.fixture()
@@ -95,4 +108,47 @@ def running_greenlee_server():
 
     ammeter.stop()
     t.join(timeout=2)
+
+
+@pytest.fixture()
+def running_all_servers():
+    """
+    Start GreenleeAmmeter (5020), EntesAmmeter (5021), CircutorAmmeter (5022)
+    each in a daemon thread with their correct commands.
+    Waits 0.5 s for all three to bind.
+    Yields {KEY_GREENLEE: (port, command), KEY_ENTES: ..., KEY_CIRCUTOR: ...}.
+    Calls stop() and join(timeout=2) for all three after the test.
+    """
+    specs = {
+        KEY_GREENLEE: (GreenleeAmmeter,  _INTEGRATION_GREENLEE_PORT),
+        KEY_ENTES:    (EntesAmmeter,     _INTEGRATION_ENTES_PORT),
+        KEY_CIRCUTOR: (CircutorAmmeter,  _INTEGRATION_CIRCUTOR_PORT),
+    }
+
+    instances: dict[str, object]          = {}
+    threads:   dict[str, threading.Thread] = {}
+
+    for key, (Cls, port) in specs.items():
+        command  = _INTEGRATION_COMMANDS[key]
+        inst     = Cls(port, command)
+        instances[key] = inst
+        t = threading.Thread(target=inst.start_server, daemon=True)
+        t.start()
+        threads[key] = t
+
+    time.sleep(0.5)   # let all three servers bind and listen
+
+    yield {
+        key: (_INTEGRATION_GREENLEE_PORT if key == KEY_GREENLEE
+              else _INTEGRATION_ENTES_PORT if key == KEY_ENTES
+              else _INTEGRATION_CIRCUTOR_PORT,
+              _INTEGRATION_COMMANDS[key])
+        for key in specs
+    }
+
+    for key, inst in instances.items():
+        inst.stop()
+    for key, t in threads.items():
+        t.join(timeout=2)
+
 

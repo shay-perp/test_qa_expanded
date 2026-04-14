@@ -13,7 +13,7 @@ import pytest
 from src.analytics.statistics import compute_stats
 from src.utils.config_loader import load_config
 from src.testing.AmmeterTester import AmmeterTester
-from src.utils.constants import KEY_PORT, KEY_COMMAND, KEY_SCALE_FACTOR
+from src.utils.constants import HOST, KEY_PORT, KEY_COMMAND, KEY_SCALE_FACTOR
 from Ammeters.Greenlee_Ammeter import GreenleeAmmeter
 
 # Ports reserved for edge-case tests — never overlap with production (5000-5002)
@@ -27,12 +27,12 @@ class TestPortBinding:
         s1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s1.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            s1.bind(("localhost", _PORT_DOUBLE_BIND))
+            s1.bind((HOST, _PORT_DOUBLE_BIND))
             s2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             # Explicitly do NOT set SO_REUSEADDR on s2
             try:
                 with pytest.raises(OSError):
-                    s2.bind(("localhost", _PORT_DOUBLE_BIND))
+                    s2.bind((HOST, _PORT_DOUBLE_BIND))
             finally:
                 s2.close()
         finally:
@@ -85,7 +85,7 @@ class TestServerStopReleasesPort:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            s.bind(("localhost", _PORT_STOP_RELEASE))  # must not raise
+            s.bind((HOST, _PORT_STOP_RELEASE))  # must not raise
         finally:
             s.close()
 
