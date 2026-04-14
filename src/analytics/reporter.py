@@ -1,5 +1,5 @@
 """
-Reporter — persists raw samples, summary stats, and index for each run.
+Reporter — persists raw samples, summary stats, and session index.
 Optionally triggers visualisations when config.analysis.visualization.enabled.
 """
 from __future__ import annotations
@@ -30,6 +30,7 @@ _INDEX_FILE  = "index.json"
 
 def save_run(
     run_id: str,
+    session_id: str,
     samples: list["SampleResult"],
     stats: dict,
     ammeter_type: str,
@@ -37,16 +38,14 @@ def save_run(
     config: dict | None = None,
 ) -> Path:
     """
-    Persist one test run to disk.
+    Persist one ammeter run to disk.
 
     Creates:
       results/runs/{run_id}/raw_samples.csv
       results/runs/{run_id}/summary.json
-    Updates:
-      results/index.json
     Optionally writes plot_timeseries.png if config.analysis.visualization.enabled.
-    plot_comparison is NOT called here — the caller is responsible for that
-    once all ammeter runs have completed.
+
+    Does NOT write index.json — call write_session_index() once after all runs.
 
     Returns the run directory Path.
     """
@@ -54,14 +53,55 @@ def save_run(
     run_dir.mkdir(parents=True, exist_ok=True)
 
     _write_csv(samples, run_dir)
-    _write_summary(run_id, ammeter_type, samples, stats, run_dir)
-    _update_index(run_id, ammeter_type, stats, results_dir)
+    _write_summary(run_id, session_id, ammeter_type, samples, stats, run_dir)
 
     if _viz_enabled(config):
         visualizer.plot_timeseries(samples, run_id, run_dir)
 
     logger.info("Run saved — run_id=%s  dir=%s", run_id, run_dir)
     return run_dir
+
+
+def write_session_index(
+    session_id: str,
+    ammeter_runs: dict[str, dict],   # {ammeter_name: {"run_id": ..., "mean": ..., "std": ...}}
+    results_dir: Path,
+) -> None:
+    """
+    Append one session entry to results/index.json.
+
+    Entry shape:
+    {
+      "session_id": "...",
+      "iso_timestamp": "...",
+      "ammeters": {
+        "greenlee":  {"run_id": "...", "mean": ..., "std": ...},
+        ...
+      }
+    }
+    Creates the file if it does not exist.
+    """
+    index_path = results_dir / _INDEX_FILE
+    results_dir.mkdir(parents=True, exist_ok=True)
+
+    entries: list[dict] = []
+    if index_path.exists():
+        with index_path.open("r", encoding="utf-8") as f:
+            try:
+                entries = json.load(f)
+            except json.JSONDecodeError:
+                entries = []
+
+    entries.append({
+        "session_id":    session_id,
+        "iso_timestamp": datetime.now(timezone.utc).isoformat(),
+        "ammeters":      ammeter_runs,
+    })
+
+    with index_path.open("w", encoding="utf-8") as f:
+        json.dump(entries, f, indent=2)
+
+    logger.info("Session index updated — session_id=%s", session_id)
 
 
 # ── private helpers ──────────────────────────────────────────────────────────
@@ -82,6 +122,7 @@ def _write_csv(samples: list["SampleResult"], run_dir: Path) -> None:
 
 def _write_summary(
     run_id: str,
+    session_id: str,
     ammeter_type: str,
     samples: list["SampleResult"],
     stats: dict,
@@ -89,6 +130,7 @@ def _write_summary(
 ) -> None:
     summary = {
         "run_id":             run_id,
+        "session_id":         session_id,
         "ammeter_type":       ammeter_type,
         "iso_timestamp":      datetime.now(timezone.utc).isoformat(),
         "measurements_count": len(samples),
@@ -97,35 +139,6 @@ def _write_summary(
     summary_path = run_dir / "summary.json"
     with summary_path.open("w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)
-
-
-def _update_index(
-    run_id: str,
-    ammeter_type: str,
-    stats: dict,
-    results_dir: Path,
-) -> None:
-    index_path = results_dir / _INDEX_FILE
-    results_dir.mkdir(parents=True, exist_ok=True)
-
-    entries: list[dict] = []
-    if index_path.exists():
-        with index_path.open("r", encoding="utf-8") as f:
-            try:
-                entries = json.load(f)
-            except json.JSONDecodeError:
-                entries = []
-
-    entries.append({
-        "run_id":       run_id,
-        "ammeter_type": ammeter_type,
-        "iso_timestamp": datetime.now(timezone.utc).isoformat(),
-        "mean":         stats.get("mean"),
-        "std":          stats.get("std"),
-    })
-
-    with index_path.open("w", encoding="utf-8") as f:
-        json.dump(entries, f, indent=2)
 
 
 def _viz_enabled(config: dict | None) -> bool:
@@ -138,4 +151,3 @@ def _viz_enabled(config: dict | None) -> bool:
         )
     except (KeyError, TypeError):
         return False
-
