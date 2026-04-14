@@ -3,10 +3,13 @@ from src.utils.Utils import generate_random_float
 
 
 class CircutorAmmeter(AmmeterEmulatorBase):
+    def __init__(self, port: int, command: str):
+        super().__init__(port, command)
+
     @property
     def get_current_command(self) -> bytes:
         # Define the command to get the current from CIRCUTOR
-        return b'MEASURE_CIRCUTOR -get_measurement -current'
+        return self._command.encode('utf-8')
 
     def measure_current(self) -> float:
         num_samples = 10

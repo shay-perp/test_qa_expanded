@@ -3,10 +3,13 @@ from src.utils.Utils import generate_random_float
 
 
 class GreenleeAmmeter(AmmeterEmulatorBase):
+    def __init__(self, port: int, command: str):
+        super().__init__(port, command)
+
     @property
     def get_current_command(self) -> bytes:
         # Define the command to get the current from Greenlee
-        return b'MEASURE_GREENLEE -get_measurement'
+        return self._command.encode('utf-8')
 
     def measure_current(self) -> float:
         voltage = generate_random_float(1.0, 10.0)  # Random voltage (1V - 10V)
