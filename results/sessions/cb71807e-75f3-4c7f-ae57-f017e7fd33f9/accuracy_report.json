@@ -1,0 +1,75 @@
+{
+  "session_id": "cb71807e-75f3-4c7f-ae57-f017e7fd33f9",
+  "iso_timestamp": "2026-04-14T12:39:07.270762+00:00",
+  "stability_ranking": [
+    {
+      "rank": 1,
+      "ammeter_type": "circutor",
+      "cv_percent": 43.36545226521757,
+      "mean_A": 0.03454610948076063,
+      "std_A": 0.014981076616369052
+    },
+    {
+      "rank": 2,
+      "ammeter_type": "entes",
+      "cv_percent": 62.74208358494104,
+      "mean_A": 75.54436089306948,
+      "std_A": 47.39810605523917
+    },
+    {
+      "rank": 3,
+      "ammeter_type": "greenlee",
+      "cv_percent": 135.32323157697678,
+      "mean_A": 0.13829375188310866,
+      "std_A": 0.18714357411726884
+    }
+  ],
+  "relative_precision": [
+    {
+      "rank": 1,
+      "ammeter_type": "circutor",
+      "relative_std": 0.4114008027641873,
+      "mean_A": 0.03454610948076063,
+      "sample_count": 10
+    },
+    {
+      "rank": 2,
+      "ammeter_type": "entes",
+      "relative_std": 0.5952236678192286,
+      "mean_A": 75.54436089306948,
+      "sample_count": 10
+    },
+    {
+      "rank": 3,
+      "ammeter_type": "greenlee",
+      "relative_std": 1.283788896352998,
+      "mean_A": 0.13829375188310866,
+      "sample_count": 10
+    }
+  ],
+  "per_ammeter_stats": {
+    "greenlee": {
+      "mean": 0.13829375188310866,
+      "median": 0.07536400295967281,
+      "std": 0.18714357411726884,
+      "min": 0.027330556801859557,
+      "max": 0.650012204298155
+    },
+    "entes": {
+      "mean": 75.54436089306948,
+      "median": 59.62523989716768,
+      "std": 47.39810605523917,
+      "min": 16.9573850799465,
+      "max": 160.426883549617
+    },
+    "circutor": {
+      "mean": 0.03454610948076063,
+      "median": 0.03792428014739366,
+      "std": 0.014981076616369052,
+      "min": 0.004908089787366338,
+      "max": 0.055510393779135664
+    }
+  },
+  "most_stable": "circutor",
+  "note": "CV measures precision (repeatability). Lower CV = more stable. Absolute accuracy requires a calibrated reference device."
+}

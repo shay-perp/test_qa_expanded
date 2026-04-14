@@ -1,0 +1,75 @@
+{
+  "session_id": "e8103739-5386-406f-ba36-f7a7d564fafa",
+  "iso_timestamp": "2026-04-14T12:27:44.941752+00:00",
+  "stability_ranking": [
+    {
+      "rank": 1,
+      "ammeter_type": "entes",
+      "cv_percent": 44.91726254074401,
+      "mean_A": 61.68817496393315,
+      "std_A": 27.70863950514337
+    },
+    {
+      "rank": 2,
+      "ammeter_type": "circutor",
+      "cv_percent": 49.10167396643207,
+      "mean_A": 0.03128430117879308,
+      "std_A": 0.01536111556748764
+    },
+    {
+      "rank": 3,
+      "ammeter_type": "greenlee",
+      "cv_percent": 55.969736725893014,
+      "mean_A": 0.10833392700916793,
+      "std_A": 0.06063421373185239
+    }
+  ],
+  "relative_precision": [
+    {
+      "rank": 1,
+      "ammeter_type": "entes",
+      "relative_std": 0.4261225676655383,
+      "mean_A": 61.68817496393315,
+      "sample_count": 10
+    },
+    {
+      "rank": 2,
+      "ammeter_type": "circutor",
+      "relative_std": 0.4658193799827582,
+      "mean_A": 0.03128430117879308,
+      "sample_count": 10
+    },
+    {
+      "rank": 3,
+      "ammeter_type": "greenlee",
+      "relative_std": 0.5309755442813915,
+      "mean_A": 0.10833392700916793,
+      "sample_count": 10
+    }
+  ],
+  "per_ammeter_stats": {
+    "greenlee": {
+      "mean": 0.10833392700916793,
+      "median": 0.08870904080363255,
+      "std": 0.06063421373185239,
+      "min": 0.05000968625366499,
+      "max": 0.24262968546116515
+    },
+    "entes": {
+      "mean": 61.68817496393315,
+      "median": 56.700002202762896,
+      "std": 27.70863950514337,
+      "min": 22.374645121864393,
+      "max": 112.53267123201069
+    },
+    "circutor": {
+      "mean": 0.03128430117879308,
+      "median": 0.02982301241194377,
+      "std": 0.01536111556748764,
+      "min": 0.012065656885004461,
+      "max": 0.05305348180763382
+    }
+  },
+  "most_stable": "entes",
+  "note": "CV measures precision (repeatability). Lower CV = more stable. Absolute accuracy requires a calibrated reference device."
+}
