@@ -156,6 +156,11 @@ def main() -> None:
         ranking = accuracy.rank_ammeters(all_stats)
         accuracy.print_ranking(ranking)
 
+    # ── cross-ammeter precision comparison ───────────────────────────────────
+    if all_results:
+        comparison = accuracy.compare_ammeters(all_results)
+        accuracy.print_comparison(comparison)
+
     # ── stop all servers cleanly ─────────────────────────────────────────────
     for name, (inst, _) in servers.items():
         inst.stop()
